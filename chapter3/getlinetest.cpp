@@ -7,7 +7,8 @@ int main(void)
     string line;
     while(std::getline(std::cin, line))
     {
-        std::cout << line << std::endl;
+        if(!line.empty())
+            std::cout << line << std::endl;
     }
     return 0;
 }
