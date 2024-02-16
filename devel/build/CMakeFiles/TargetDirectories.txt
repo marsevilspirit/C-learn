@@ -1,0 +1,3 @@
+/home/mars/code/c++learn/devel/build/CMakeFiles/x11game.dir
+/home/mars/code/c++learn/devel/build/CMakeFiles/edit_cache.dir
+/home/mars/code/c++learn/devel/build/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/x11game.dir/main.cpp.o -o x11game  /usr/lib/libSM.so /usr/lib/libICE.so /usr/lib/libX11.so /usr/lib/libXext.so 
