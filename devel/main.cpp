@@ -13,6 +13,11 @@
 
 namespace mygame {
 
+struct Rect{
+    long x, y;
+    long width, height;
+};
+
 class GameDisplay {
 public:
     GameDisplay();
@@ -22,6 +27,7 @@ public:
 
     void drawRect(unsigned long col, int x, int y, int width, int height);
     void redraw();
+    Rect getGeometry();
 
 private:
     Display *display;
@@ -39,7 +45,7 @@ GameDisplay::GameDisplay()
 
     screen = DefaultScreen(display);
 
-    window = XCreateSimpleWindow(display, RootWindow(display, screen), 0, 0, 1000, 1000, 1, BlackPixel(display, screen), WhitePixel(display, screen));
+    window = XCreateSimpleWindow(display, RootWindow(display, screen), 0, 0, 1000, 1000, 1, BlackPixel(display, screen), 0x363d4d/*WhitePixel(display, screen)*/);
 
     XSelectInput(display, window, KeyPressMask | ExposureMask);
     XMapWindow(display, window);
@@ -79,6 +85,23 @@ void GameDisplay::redraw()
     XSendEvent(display, window, false, ExposureMask, &ev);
 }
 
+Rect GameDisplay::getGeometry()
+{
+    Window root_wind;
+    int x, y;
+    unsigned int width, height, border_width, depth;
+    XGetGeometry(display, window, &root_wind, &x, &y, &width, &height, &border_width, &depth);
+
+    Rect r;
+
+    r.x = x;
+    r.y = y;
+    r.width = width;
+    r.height = height;
+
+    return r;
+}
+
 Display *GameDisplay::getDisplay()
 {
     return display;
@@ -94,11 +117,14 @@ private:
     GameDisplay gamedisplay;
     XEvent event;
     bool is_running = true;
+    int x = 50;
+    int y = 50;
 
     bool getEvent();
     void handleEvent();
-    int x = 50;
-    int y = 50;
+    bool isPlaywithinBounds();
+    void draw();
+    void drawPlayer();
 };
 
 Game::Game()
@@ -111,7 +137,14 @@ void Game::run()
     while (is_running)
     {
         if(getEvent())
+        {
             handleEvent();
+            if(!isPlaywithinBounds())
+            {
+                printf("PLAYER OUT OF BOUNDS -- GAME OVER!! -- YOU LOSE!!\n");
+                is_running = false;
+            }
+        }
     }
 }
 
@@ -127,11 +160,21 @@ bool Game::getEvent()
     return false;
 }
 
+void Game::drawPlayer()
+{
+    gamedisplay.drawRect(COLOR, x, y, 25, 25);
+}
+
+void Game::draw()
+{
+    drawPlayer();
+}
+
 void Game::handleEvent()
 {
     if(event.type == Expose)
     {
-        gamedisplay.drawRect(COLOR, x, y, 25, 25);
+        draw();
     }
 
 
@@ -141,16 +184,29 @@ void Game::handleEvent()
 
         switch (event.xkey.keycode)
         {
-            case KEY_UP:     printf("KEY_UP\n");    y -= 5; gamedisplay.redraw(); break;
-            case KEY_DOWN:   printf("KEY_DOWN\n");  y += 5; gamedisplay.redraw(); break;
-            case KEY_LEFT:   printf("KEY_LEFT\n");  x -= 5; gamedisplay.redraw(); break;
-            case KEY_RIGHT:  printf("KEY_RIGHT\n"); x += 5; gamedisplay.redraw(); break;
+            case KEY_UP:     printf("KEY_UP\n");    y -= 10; gamedisplay.redraw(); break;
+            case KEY_DOWN:   printf("KEY_DOWN\n");  y += 10; gamedisplay.redraw(); break;
+            case KEY_LEFT:   printf("KEY_LEFT\n");  x -= 10; gamedisplay.redraw(); break;
+            case KEY_RIGHT:  printf("KEY_RIGHT\n"); x += 10; gamedisplay.redraw(); break;
 
             case KEY_SPACE:  printf("KEY_SPACE\n"); break;
 
             case KEY_ESCAPE: printf("KEY_ESCAPE\n"); is_running = false; break;
         }
     }
+}
+
+
+bool Game::isPlaywithinBounds()
+{
+    Rect w = gamedisplay.getGeometry();
+
+    if(x < 0 || x > w.width - 25 || y < 0 || y > w.height - 25)
+    {
+        return false;
+    }
+
+    return true;
 }
 
 }
