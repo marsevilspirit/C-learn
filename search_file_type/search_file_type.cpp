@@ -1,21 +1,20 @@
 #include <iostream>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 #include <vector>
-#include <queue>
 #include <string>
-#include <atomic>
-#include <dirent.h>
-#include <sys/stat.h>
-#include <cstring>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 struct SearchConfig {
-    std::string root_path;    
-    std::string file_type;    
-    int max_concurrency;      
-    int max_depth;            
-    bool skip_hidden;         
-    std::vector<std::string> skip_paths;   
+    std::string root_path;
+    std::string file_type;
+    int max_concurrency;
+    int max_depth;
+    bool skip_hidden;
+    std::vector<std::string> skip_paths;
 };
 
 class FileSearch {
@@ -30,53 +29,47 @@ public:
 private:
     SearchConfig config_;
     std::mutex mutex_;
-    std::atomic<int> running_threads_;
+    std::condition_variable cv_;
+    int running_threads_;
 
     void search(const std::string& path, int depth) {
         if (depth > config_.max_depth)
             return;
 
-        DIR* dir = opendir(path.c_str());
-        if (!dir)
-            return;
+        for (const auto& entry : fs::directory_iterator(path)) {
+            const std::string& entry_path = entry.path().string();
 
-        struct dirent* entry;
-        while ((entry = readdir(dir)) != nullptr) {
-            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-                continue;
-
-            std::string entry_path = path + "/" + entry->d_name;
-
-            // 获取文件信息
-            struct stat stat_buf;
-            if (stat(entry_path.c_str(), &stat_buf) == -1)
-                continue;
-
-            if (S_ISDIR(stat_buf.st_mode)) {
-                // 如果是目录，且不在跳过列表中，递归搜索
+            // 如果是目录，且不在跳过列表中，递归搜索
+            if (fs::is_directory(entry.status())) {
                 if (!shouldSkip(entry_path)) {
+                    {
+                        std::unique_lock<std::mutex> lock(mutex_);
+                        cv_.wait(lock, [this]() { return running_threads_ < config_.max_concurrency; });
+                        ++running_threads_;
+                    }
+
                     std::thread(&FileSearch::search, this, entry_path, depth + 1).detach();
-                    std::lock_guard<std::mutex> lock(mutex_);
-                    ++running_threads_;
                 }
-            } else if (S_ISREG(stat_buf.st_mode)) {
-                // 如果是文件，检查文件类型并输出路径
-                size_t file_type_len = config_.file_type.length();
-                if (entry_path.length() >= file_type_len && 
-                    entry_path.substr(entry_path.length() - file_type_len) == config_.file_type) {
+            } 
+            // 如果是文件，检查文件类型并输出路径
+            else if (fs::is_regular_file(entry.status())) {
+                if (entry_path.size() >= config_.file_type.size() && 
+                    entry_path.substr(entry_path.size() - config_.file_type.size()) == config_.file_type) {
                     std::lock_guard<std::mutex> lock(mutex_);
                     std::cout << "Found file: " << entry_path << std::endl;
                 }
             }
         }
-        closedir(dir);
-        std::lock_guard<std::mutex> lock(mutex_);
-        --running_threads_;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            --running_threads_;
+        }
+        cv_.notify_all();
     }
 
     bool shouldSkip(const std::string& path) const {
         // 检查是否跳过隐藏文件或目录
-        if (config_.skip_hidden && path.back() == '.')
+        if (config_.skip_hidden && fs::path(path).filename().string().front() == '.')
             return true;
 
         // 检查是否跳过指定路径
@@ -91,16 +84,17 @@ private:
 
 int main() {
     SearchConfig config;
-    config.root_path = "home";
-    config.file_type = ".c";
+    config.root_path = "/home/mars/code/";
+    config.file_type = ".cpp";
     config.max_concurrency = 4;
-    config.max_depth = 50;
+    config.max_depth = 10;
     config.skip_hidden = true;
-    config.skip_paths = {"/path/to/skip"};
+    config.skip_paths = {"home/mars/code/leetcode"};
 
     FileSearch file_search(config);
     file_search.start();
 
     return 0;
 }
+
 
