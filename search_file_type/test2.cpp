@@ -7,6 +7,11 @@
 #include <filesystem>
 #include <condition_variable>
 #include <functional>
+#include <unistd.h>
+
+#define GREEN "\033[32m"
+#define RED   "\033[31m"
+#define RESET "\033[0m"
 
 struct SearchConfig {
     std::string root_path;              // 要搜索的根目录
@@ -17,12 +22,16 @@ struct SearchConfig {
     std::vector<std::string> skip_paths;// 要跳过的目录或文件的路径
 };
 
-class ThreadPool {
+class ThreadPool 
+{
 public:
-    explicit ThreadPool(size_t num_threads) : stop(false) {
+    explicit ThreadPool(size_t num_threads) : stop(false) 
+    {
         for (size_t i = 0; i < num_threads; ++i)
-            workers.emplace_back([this] {
-                for (;;) {
+            workers.emplace_back([this] 
+                    {
+                for (;;) 
+                {
                     std::function<void()> task;
                     {
                         std::unique_lock<std::mutex> lock(this->queue_mutex);
@@ -38,7 +47,8 @@ public:
     }
 
     template<class F, class... Args>
-    void enqueue(F &&f, Args &&... args) {
+    void enqueue(F &&f, Args &&... args) 
+    {
         {
             std::unique_lock<std::mutex> lock(queue_mutex);
             tasks.emplace(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
@@ -46,7 +56,8 @@ public:
         condition.notify_one();
     }
 
-    ~ThreadPool() {
+    ~ThreadPool() 
+    {
         {
             std::unique_lock<std::mutex> lock(queue_mutex);
             stop = true;
@@ -69,7 +80,8 @@ class FileSearch {
 public:
     FileSearch(const SearchConfig &config) : config_(config) {}
 
-    void searchFiles() {
+    void searchFiles() 
+    {
         ThreadPool pool(config_.max_concurrency);
         pool.enqueue(&FileSearch::searchTask, this, std::filesystem::path(config_.root_path), 0);
     }
@@ -77,38 +89,46 @@ public:
 private:
     SearchConfig config_;
 
-    void searchTask(const std::filesystem::path &current_path, int depth) {
+    void searchTask(const std::filesystem::path &current_path, int depth) 
+    {
         if (depth > config_.max_depth)
             return;
 
         try {
-            for (const auto &entry : std::filesystem::directory_iterator(current_path)) {
-                if (std::filesystem::is_directory(entry)) {
-                    // Handle directory
-                    if (shouldSkip(entry.path())) {
+            for (const auto &entry : std::filesystem::directory_iterator(current_path)) 
+            {
+                if (std::filesystem::is_directory(entry)) 
+                {
+                    if (shouldSkip(entry.path())) 
+                    {
                         continue;
                     }
                     ThreadPool pool(config_.max_concurrency);
                     pool.enqueue(&FileSearch::searchTask, this, entry.path(), depth + 1);
-                } else if (std::filesystem::is_regular_file(entry)) {
-                    // Handle file
-                    if (entry.path().extension() == config_.file_type) {
-                        std::cout << "Found file: " << entry.path() << std::endl;
-                        // Do whatever you want with the file
+                } else if (std::filesystem::is_regular_file(entry)) 
+                {
+                    if (entry.path().extension() == config_.file_type) 
+                    {
+                        std::cout << GREEN <<"Found file: " << RESET <<entry.path() << '\n';
                     }
                 }
             }
-        } catch (const std::exception &ex) {
-            std::cerr << "Error accessing: " << current_path << " - " << ex.what() << std::endl;
+        } catch (const std::exception &ex) 
+        {
+            std::cerr << RED <<"Error accessing: " << RESET <<current_path << " - " << ex.what() << '\n';
         }
     }
 
-    bool shouldSkip(const std::filesystem::path &path) const {
-        if (config_.skip_hidden && path.filename().string().front() == '.') {
+    bool shouldSkip(const std::filesystem::path &path) const 
+    {
+        if (config_.skip_hidden && path.filename().string().front() == '.') 
+        {
             return true;
         }
-        for (const auto &skip_path : config_.skip_paths) {
-            if (path == std::filesystem::path(skip_path)) {
+        for (const auto &skip_path : config_.skip_paths) 
+        {
+            if (path == std::filesystem::path(skip_path)) 
+            {
                 return true;
             }
         }
@@ -116,13 +136,69 @@ private:
     }
 };
 
-int main() {
+int main(void) 
+{
     SearchConfig config;
-    config.root_path = "/home";           // 设置要搜索的根目录
-    config.file_type = ".txt";            // 设置要搜索的文件类型
-    config.max_concurrency = 4;           // 设置最大并发数
-    config.max_depth = 6;                 // 设置最大搜索深度
-    config.skip_hidden = true;            // 设置是否跳过隐藏文件或目录
+
+    std::cout << "欢迎使用方泽亚历尽千辛万苦编写的多线程文件搜索程序" << '\n';
+    std::cout << "输入你想搜索的根目录: ";
+    std::cin >> config.root_path;           // 设置要搜索的根目录
+    std::cout << "输入你想搜索的文件类型: ";
+    std::cin >> config.file_type;            // 设置要搜索的文件类型
+    std::cout << "输入最大并发数: ";
+    std::cin >> config.max_concurrency;           // 设置最大并发数
+    std::cout << "输入最大搜索深度: ";
+    std::cin >> config.max_depth;                 // 设置最大搜索深度
+
+    std::cout << "是否要跳过隐藏文件(y/n): ";
+
+    std::string temp{};
+    std::cin >> temp; 
+    if(temp == "y")
+    {
+        config.skip_hidden = true;
+    }
+    else if(temp == "n")
+    {
+        config.skip_hidden = false;
+    }
+    else 
+    {
+        std::cout << "既然你乱输的话，我就当你要跳过了哦";
+        config.skip_hidden = true;
+    }
+
+    if(config.root_path == "/")
+    {
+        std::cout << "检测到你想搜索的根目录是/, 强烈建议你跳过/proc目录，会极大加快搜索速度\n";
+    }
+
+    std::cout << "是否有要跳过的路径(y/n): ";
+
+    std::cin >> temp;
+
+    while(temp == "y")
+    {
+        std::cout << "输入想要跳过的路径: ";
+        std::cin >> temp;
+        config.skip_paths.emplace_back(temp);
+        std::cout << "是否还有要跳过的路径(y/n): ";
+    }
+
+    if(temp != "n")
+    {
+        std::cout << "\n既然你乱输的话，我就当你要没有了哦\n";
+    }
+
+    std::cout << "ok，一切就绪，准备好了吗，要开始了!!!\n";
+
+    for(int i = 3; i != 0; i--)
+    {
+        std::cout << i << ' ' << std::endl;
+        usleep(1000000);
+    }
+    std::cout << "go!\n";
+    usleep(1000000);
 
     FileSearch fileSearch(config);
     fileSearch.searchFiles();
