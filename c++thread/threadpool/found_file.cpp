@@ -22,79 +22,83 @@ struct SearchConfig {
     std::vector<std::string> skip_paths;// 要跳过的目录或文件的路径
 };
 
-class ThreadPool 
-{
+class threadpool{
 public:
-    explicit ThreadPool(size_t num_threads) : stop(false) 
+    threadpool(int num):stop(false)
     {
-        for (size_t i = 0; i < num_threads; ++i)
-            workers.emplace_back([this] 
-                    {
-                for (;;) 
-                {
-                    std::function<void()> task;
-                    {
-                        std::unique_lock<std::mutex> lock(this->queue_mutex);
-                        this->condition.wait(lock, [this] { return this->stop || !this->tasks.empty(); });
-                        if (this->stop && this->tasks.empty())
-                            return;
-                        task = std::move(this->tasks.front());
-                        this->tasks.pop();
-                    }
-                    task();
-                }
-            });
+        for(int i = 0; i < num; ++i)
+        {
+            workers.emplace_back([this]{
+                        while(true)
+                        {
+                            std::function<void()> task;
+                            {
+                                std::unique_lock<std::mutex> lock(queue_mutex);
+                                condition.wait(lock, [this]{return stop | !tasks.empty();});
+                                if(stop && tasks.empty())
+                                    return;
+                                task = std::move(tasks.front());
+                                tasks.pop();
+                            }
+                            task();
+                        }
+                    });
+        }
     }
 
-    template<typename F, typename... Args>
-    void enqueue(F &&f, Args &&... args) 
+    template<typename T, typename... Args>
+    void enqueue(T&& t, Args&&... args)
     {
         {
             std::unique_lock<std::mutex> lock(queue_mutex);
-            tasks.emplace(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
+            tasks.emplace(std::bind(std::forward<T>(t),std::forward<Args>(args)...));
         }
+
         condition.notify_one();
     }
 
-    ~ThreadPool() 
+    virtual ~threadpool()
     {
-        {
-            std::unique_lock<std::mutex> lock(queue_mutex);
-            stop = true;
-        }
+        stop = true;
         condition.notify_all();
-        for (std::thread &worker : workers)
+
+        for(auto& worker : workers)
             worker.join();
     }
 
-private:
-    std::vector<std::thread> workers;//存储了线程池中的所有工作线程。每个线程都会从任务队列中取出任务并执行
-    std::queue<std::function<void()>> tasks;//任务队列，存储了待执行的任务。任务以 std::function<void()> 的形式存储，即可调用对象的容器
 
-    std::mutex queue_mutex;//互斥量，用于保护对任务队列的访问
-    std::condition_variable condition;//条件变量
-    bool stop;
+private:
+    bool stop{false};
+    std::queue<std::function<void()>> tasks{};
+    std::vector<std::thread> workers{};
+    std::condition_variable condition{};
+    std::mutex queue_mutex{};
 };
 
-class FileSearch {
+void test() {
+}
+class FileSearch:public threadpool
+{
 public:
-    FileSearch(const SearchConfig &config) : config_(config), pool(config_.max_concurrency){}
+    FileSearch(const SearchConfig &config, int thread_nums) : config_(config), threadpool(thread_nums){}
 
     void searchFiles() 
     {
-        pool.enqueue(&FileSearch::searchTask, this, std::filesystem::path(config_.root_path), 0);
+        enqueue(&FileSearch::searchTask, this, std::filesystem::path(config_.root_path), 0);
     }
 
 private:
-    SearchConfig config_;
-    ThreadPool pool;
+    SearchConfig config_{};
 
+
+public:
     void searchTask(const std::filesystem::path &current_path, int depth)
     {
         if (depth > config_.max_depth)
             return;
 
-        try {
+        try 
+        {
             for (const auto &entry : std::filesystem::directory_iterator(current_path)) 
             {
                 if (std::filesystem::is_directory(entry)) 
@@ -103,8 +107,9 @@ private:
                     {
                         continue;
                     }
-                    pool.enqueue(&FileSearch::searchTask, this, entry.path(), depth + 1);
-                } else if (std::filesystem::is_regular_file(entry)) 
+                    enqueue(&FileSearch::searchTask, this, entry.path()/* depth + 1*/);
+                } 
+                else if (std::filesystem::is_regular_file(entry)) 
                 {
                     if (entry.path().extension() == config_.file_type) 
                     {
@@ -112,7 +117,8 @@ private:
                     }
                 }
             }
-        } catch (const std::exception &ex) 
+        } 
+        catch (const std::exception &ex) 
         {
             std::cerr << RED <<"Error accessing: " << RESET << current_path << " - " << ex.what() << '\n';
         }
@@ -137,6 +143,7 @@ private:
 
 int main(void) 
 {
+
     SearchConfig config;
 
     std::cout << "欢迎使用方泽亚历尽千辛万苦编写的多线程文件搜索程序" << '\n';
@@ -193,7 +200,7 @@ int main(void)
     std::cout << "go!\n";
     usleep(1000000);
 
-    FileSearch fileSearch(config);
+    FileSearch fileSearch(config, config.max_concurrency);
     fileSearch.searchFiles();
 
     return 0;
