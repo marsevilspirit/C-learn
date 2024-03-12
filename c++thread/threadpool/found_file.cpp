@@ -75,8 +75,6 @@ private:
     std::mutex queue_mutex{};
 };
 
-void test() {
-}
 class FileSearch:public threadpool
 {
 public:
