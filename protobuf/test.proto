@@ -1,9 +1,0 @@
-syntax = "proto3";
-package tutorial;
-
-option optimize_for = LINE_RUNTIME;
-
-message Person{
-    int32 id = 1;
-    repeated string name = 2;
-}

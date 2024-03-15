@@ -1,0 +1,8 @@
+/home/mars/code/c++learn/protobuf/build/CMakeFiles/edit_cache.dir
+/home/mars/code/c++learn/protobuf/build/CMakeFiles/rebuild_cache.dir
+/home/mars/code/c++learn/protobuf/build/src/CMakeFiles/test.dir
+/home/mars/code/c++learn/protobuf/build/src/CMakeFiles/edit_cache.dir
+/home/mars/code/c++learn/protobuf/build/src/CMakeFiles/rebuild_cache.dir
+/home/mars/code/c++learn/protobuf/build/src/proto/CMakeFiles/proto.dir
+/home/mars/code/c++learn/protobuf/build/src/proto/CMakeFiles/edit_cache.dir
+/home/mars/code/c++learn/protobuf/build/src/proto/CMakeFiles/rebuild_cache.dir

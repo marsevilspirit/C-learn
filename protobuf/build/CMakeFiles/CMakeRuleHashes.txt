@@ -1,0 +1,2 @@
+# Hashes of file build rules.
+ced58ec4cb976f707cfa2a90aa2002b6 src/proto/account.pb.h
